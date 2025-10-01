@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Relatório de Análise de Treino - 29/09/2025</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700;800&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+        .chart-bar {
+            transition: width 0.5s ease-in-out;
+        }
+    </style>
+</head>
+<body class="bg-gray-900 text-gray-200 antialiased">
+
+    <div class="container mx-auto p-4 md:p-8">
+        
+        <!-- Cabeçalho -->
+        <header class="mb-8 text-center">
+            <h1 class="text-4xl md:text-5xl font-extrabold text-white">Relatório de Treino</h1>
+            <p class="text-lg text-gray-400 mt-2">Análise da "Rodagem Leve" de Segunda-feira, 29/09/2025</p>
+        </header>
+
+        <!-- Métricas Principais -->
+        <section class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-10">
+            <div class="bg-gray-800 p-6 rounded-lg text-center shadow-lg">
+                <h3 class="text-gray-400 text-sm font-medium">Distância</h3>
+                <p class="text-3xl font-bold text-white mt-1">6.03 <span class="text-lg">km</span></p>
+            </div>
+            <div class="bg-gray-800 p-6 rounded-lg text-center shadow-lg">
+                <h3 class="text-gray-400 text-sm font-medium">Tempo Total</h3>
+                <p class="text-3xl font-bold text-white mt-1">37:38</p>
+            </div>
+            <div class="bg-gray-800 p-6 rounded-lg text-center shadow-lg">
+                <h3 class="text-gray-400 text-sm font-medium">Pace Médio</h3>
+                <p class="text-3xl font-bold text-white mt-1">06:14 <span class="text-lg">/km</span></p>
+            </div>
+            <div class="bg-gray-800 p-6 rounded-lg text-center shadow-lg">
+                <h3 class="text-gray-400 text-sm font-medium">Elevação</h3>
+                <p class="text-3xl font-bold text-white mt-1">81 <span class="text-lg">m</span></p>
+            </div>
+        </section>
+
+        <!-- Análise Gráfica -->
+        <section class="bg-gray-800 p-4 md:p-6 rounded-lg mb-10 shadow-lg">
+            <h2 class="text-2xl font-bold text-white mb-4">A História Visual do Treino</h2>
+            <p class="text-gray-400 mb-6">O gráfico abaixo mostra a relação entre seu ritmo (Pace), Frequência Cardíaca (FC) e Cadência ao longo dos 6km. Note como a FC se estabiliza em um patamar elevado após o aquecimento inicial.</p>
+            <div class="bg-gray-700 rounded-lg overflow-hidden">
+                <img src="/Users/gustavo/Desktop/analise-treinos/grafico_treino_suavizado.png" alt="Gráfico de análise do treino com Pace, Frequência Cardíaca e Cadência" class="w-full h-auto">
+            </div>
+        </section>
+        
+        <!-- A Grande Descoberta: Zonas de Esforço -->
+        <section class="bg-gray-800 p-4 md:p-6 rounded-lg mb-10 shadow-lg">
+            <h2 class="text-2xl font-bold text-white mb-2">A Grande Descoberta: Onde Esteve o Seu Esforço?</h2>
+            <p class="text-gray-400 mb-6">Nosso agente analisou o tempo que seu coração passou em cada zona de esforço. O resultado foi revelador.</p>
+
+            <div class="space-y-4">
+                <!-- Zona 1 -->
+                <div class="flex items-center">
+                    <span class="w-28 text-sm font-medium text-gray-300">Z1 - Muito Leve</span>
+                    <div class="w-full bg-gray-700 rounded-full h-6">
+                        <div class="bg-blue-800 h-6 rounded-full chart-bar text-xs font-medium text-blue-100 text-center p-1 leading-none" style="width: 1.5%">1.5%</div>
+                    </div>
+                </div>
+                <!-- Zona 2 -->
+                <div class="flex items-center">
+                    <span class="w-28 text-sm font-medium text-gray-300">Z2 - Leve</span>
+                    <div class="w-full bg-gray-700 rounded-full h-6">
+                        <div class="bg-green-700 h-6 rounded-full chart-bar text-xs font-medium text-green-100 text-center p-1 leading-none" style="width: 1.2%">1.2%</div>
+                    </div>
+                </div>
+                <!-- Zona 3 -->
+                <div class="flex items-center">
+                    <span class="w-28 text-sm font-medium text-gray-300">Z3 - Moderado</span>
+                    <div class="w-full bg-gray-700 rounded-full h-6">
+                        <div class="bg-yellow-600 h-6 rounded-full chart-bar text-xs font-medium text-yellow-100 text-center p-1 leading-none" style="width: 4.0%">4.0%</div>
+                    </div>
+                </div>
+                <!-- Zona 4 -->
+                <div class="flex items-center">
+                    <span class="w-28 text-sm font-medium text-gray-300">Z4 - Difícil</span>
+                    <div class="w-full bg-gray-700 rounded-full h-6">
+                        <div class="bg-orange-600 h-6 rounded-full chart-bar text-xs font-medium text-orange-100 text-center p-1 leading-none" style="width: 15.4%">15.4%</div>
+                    </div>
+                </div>
+                <!-- Zona 5 -->
+                <div class="flex items-center">
+                    <span class="w-28 text-sm font-medium text-gray-300">Z5 - Máximo</span>
+                    <div class="w-full bg-gray-700 rounded-full h-6">
+                        <div class="bg-red-700 h-6 rounded-full chart-bar text-xs font-medium text-red-100 text-center p-1 leading-none" style="width: 77.8%">77.8%</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="mt-8 p-4 bg-gray-700/50 rounded-lg border border-yellow-500/30">
+                <h3 class="font-bold text-lg text-yellow-300">Análise do Fisiologista Virtual</h3>
+                <p class="text-gray-300 mt-2">O seu treino, planejado como "Leve", foi executado com um esforço predominantemente "Máximo". Quase **78% do tempo** foi gasto na Zona 5, a mais alta intensidade. Isso revela uma lição fundamental no treino de corrida: a percepção de esforço pode enganar.</p>
+                <p class="text-gray-300 mt-3">Para evoluir de forma segura e consistente rumo ao seu objetivo dos 35 minutos, é crucial aplicar o **Princípio 80/20**: 80% do seu volume de treino deve ser em baixa intensidade (Zonas 1 e 2) para construir sua base aeróbica, e apenas 20% em alta intensidade (Zonas 4 e 5) para ganhar velocidade.</p>
+            </div>
+        </section>
+
+        <!-- Conclusão e Próxima Missão -->
+        <section class="text-center bg-gray-800 p-6 rounded-lg shadow-lg">
+             <h2 class="text-2xl font-bold text-white mb-2">Sua Próxima Missão</h2>
+             <p class="text-gray-300 max-w-2xl mx-auto">No seu próximo treino de "Rodagem Leve", o desafio é outro: ignore o ritmo (pace) e foque exclusivamente em manter sua Frequência Cardíaca na **Zona 2 (entre 110 e 128 bpm)**. Será um treino lento, talvez até com caminhadas, mas será o treino mais produtivo que você pode fazer para construir a base de um corredor de elite.</p>
+        </section>
+        
+    </div>
+
+</body>
+</html>
+
