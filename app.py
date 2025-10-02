@@ -6,26 +6,29 @@ import matplotlib.pyplot as plt
 from datetime import timedelta
 
 # --- Funções de Análise (nossa lógica principal) ---
+# (As funções de cálculo e plotagem permanecem as mesmas da v1.3)
 def calcular_velocidade_e_pace(df):
-    df.dropna(subset=['timestamp', 'distancia_m'], inplace=True)
-    df['delta_distancia_m'] = df['distancia_m'].diff()
-    df['delta_tempo_s'] = df['timestamp'].diff().dt.total_seconds()
-    df['velocidade_ms'] = df['delta_distancia_m'] / df['delta_tempo_s']
-    df.replace([np.inf, -np.inf], np.nan, inplace=True)
-    df['velocidade_ms'] = df['velocidade_ms'].ffill()
-    df.dropna(subset=['velocidade_ms'], inplace=True)
-    df['pace_min_km'] = 16.667 / df['velocidade_ms']
-    return df
+    df_calc = df.copy()
+    df_calc.dropna(subset=['timestamp', 'distancia_m'], inplace=True)
+    df_calc['delta_distancia_m'] = df_calc['distancia_m'].diff()
+    df_calc['delta_tempo_s'] = df_calc['timestamp'].diff().dt.total_seconds()
+    df_calc['velocidade_ms'] = df_calc['delta_distancia_m'] / df_calc['delta_tempo_s']
+    df_calc.replace([np.inf, -np.inf], np.nan, inplace=True)
+    df_calc['velocidade_ms'] = df_calc['velocidade_ms'].ffill()
+    df_calc.dropna(subset=['velocidade_ms'], inplace=True)
+    df_calc['pace_min_km'] = 16.667 / df_calc['velocidade_ms']
+    return df_calc
 
 def analisar_zonas_fc(df, fc_maxima):
+    df_fc = df.dropna(subset=['fc_bpm']).copy()
     zonas_limites = [0, fc_maxima * 0.6, fc_maxima * 0.7, fc_maxima * 0.8, fc_maxima * 0.9, fc_maxima * 2]
     zonas_labels = ["Z1 - Muito Leve", "Z2 - Leve", "Z3 - Moderado", "Z4 - Difícil", "Z5 - Máximo"]
-    df['zona_fc'] = pd.cut(df['fc_bpm'], bins=zonas_limites, labels=zonas_labels, right=False)
-    tempo_por_zona = df['zona_fc'].value_counts().sort_index()
+    df_fc['zona_fc'] = pd.cut(df_fc['fc_bpm'], bins=zonas_limites, labels=zonas_labels, right=False)
+    tempo_por_zona = df_fc['zona_fc'].value_counts().sort_index()
     return tempo_por_zona
 
 def plotar_grafico(df):
-    df_plot = df.copy()
+    df_plot = df.dropna(subset=['distancia_m', 'velocidade_ms', 'fc_bpm']).copy()
     df_plot['distancia_km'] = df_plot['distancia_m'] / 1000.0
     df_plot['pace_suavizado'] = df_plot['pace_min_km'].rolling(window=15, min_periods=1).mean()
     df_plot = df_plot[(df_plot['pace_suavizado'] < 15) & (df_plot['pace_suavizado'] > 2)]
@@ -59,10 +62,15 @@ def plotar_grafico(df):
     ax1.legend(lines + lines2, labels + labels2, loc='best')
     return fig
 
+def formatar_tempo_min_seg(segundos):
+    minutos = int(segundos // 60)
+    segundos = int(segundos % 60)
+    return f"{minutos:02d}:{segundos:02d}"
+
 # --- Interface do Aplicativo Streamlit ---
 st.set_page_config(page_title="Agente de Análise de Treinos", layout="wide")
 st.title("🏃‍♂️ Agente de Análise de Treinos")
-st.write("Faça o upload do seu arquivo de treino no formato `.fit` para uma análise detalhada.")
+st.write("Faça o upload do seu arquivo de treino no formato `.fit` para uma análise detalhada e completa.")
 
 uploaded_file = st.file_uploader("Escolha seu arquivo .fit", type="fit")
 
@@ -70,33 +78,38 @@ if uploaded_file is not None:
     try:
         fitfile = fitparse.FitFile(uploaded_file)
         
-        timestamps, distancias, heart_rates, cadences = [], [], [], []
+        timestamps, distancias, heart_rates, cadences, altitudes = [], [], [], [], []
         for record in fitfile.get_messages('record'):
             timestamps.append(record.get_value('timestamp'))
             distancias.append(record.get_value('distance'))
             heart_rates.append(record.get_value('heart_rate'))
             cadences.append(record.get_value('cadence'))
+            altitudes.append(record.get_value('altitude'))
 
         df = pd.DataFrame({
             'timestamp': timestamps, 'distancia_m': distancias,
-            'fc_bpm': heart_rates, 'cadencia_spm': cadences
+            'fc_bpm': heart_rates, 'cadencia_spm': cadences,
+            'altitude_m': altitudes
         })
 
         st.header("Análise Detalhada do Treino")
         
-        with st.spinner('Calculando métricas e gerando gráfico...'):
-            df = calcular_velocidade_e_pace(df)
-            
-            # Gráfico
-            st.pyplot(plotar_grafico(df))
+        with st.spinner('Analisando dados... Isso pode levar um momento.'):
+            df_com_pace = calcular_velocidade_e_pace(df)
 
-            # Análise de Zonas de FC
-            st.subheader("Análise de Esforço: Zonas de Frequência Cardíaca")
-            fc_max_input = st.number_input("Informe sua Frequência Cardíaca Máxima (bpm):", min_value=100, max_value=250, value=183)
+            # --- NOVIDADE: Painel de Métricas ---
+            st.subheader("Painel de Métricas Gerais")
             
-            if fc_max_input:
-                tempo_por_zona = analisar_zonas_fc(df, fc_max_input)
-                st.table(tempo_por_zona.apply(lambda x: f"{int(x // 60):02d}:{int(x % 60):02d}"))
-    
-    except Exception as e:
-        st.error(f"Ocorreu um erro ao processar o arquivo: {e}")
+            # Cálculos das métricas
+            tempo_total = (df_com_pace['timestamp'].iloc[-1] - df_com_pace['timestamp'].iloc[0]).total_seconds()
+            distancia_total_km = df_com_pace['distancia_m'].iloc[-1] / 1000.0
+            pace_medio_decimal = tempo_total / 60 / distancia_total_km if distancia_total_km > 0 else 0
+            
+            fc_media = df_com_pace['fc_bpm'].mean()
+            fc_max = df_com_pace['fc_bpm'].max()
+            
+            cad_media = df_com_pace['cadencia_spm'].mean()
+            cad_max = df_com_pace['cadencia_spm'].max()
+
+            # Comprimento da Pernada (Stride Length) em cm
+            # Velocidade média em m/s / (Cadência média em spm / 120)
