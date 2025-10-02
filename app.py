@@ -34,10 +34,7 @@ def plotar_grafico(df):
     df_plot = df.dropna(subset=['distancia_m', 'velocidade_ms', 'fc_bpm']).copy()
     df_plot['distancia_km'] = df_plot['distancia_m'] / 1000.0
     df_plot['pace_min_km'] = 16.667 / df_plot['velocidade_ms']
-    
-    # --- ALTERAÇÃO PRINCIPAL: Aumentando a janela de suavização ---
     df_plot['pace_suavizado'] = df_plot['pace_min_km'].rolling(window=30, min_periods=1).mean()
-    
     df_plot = df_plot[(df_plot['pace_suavizado'] < 15) & (df_plot['pace_suavizado'] > 2)]
     
     fig, ax1 = plt.subplots(figsize=(15, 7))
@@ -50,18 +47,19 @@ def plotar_grafico(df):
     ax1.tick_params(axis='y', labelcolor=color)
     ax1.invert_yaxis()
 
+    # --- ALTERAÇÃO PRINCIPAL: Definindo os limites do eixo do Pace ---
+    ax1.set_ylim(8.0, 3.0) # Define a escala de 8:00/km a 3:00/km
+
     ax2 = ax1.twinx()
     color_fc = 'tab:red'
     ax2.set_ylabel('FC (bpm)', color=color_fc, fontsize=12)
     ax2.plot(df_plot['distancia_km'], df_plot['fc_bpm'], color=color_fc, label='Frequência Cardíaca')
     ax2.tick_params(axis='y', labelcolor=color_fc)
 
-    # --- Coleta e correção das legendas ---
     lines, labels = ax1.get_legend_handles_labels()
     lines2, labels2 = ax2.get_legend_handles_labels()
     
     if df_plot['cadencia_spm'].notna().sum() > 50:
-        # O plot da cadência retorna uma lista de linhas, pegamos a primeira
         line_cad = ax2.plot(df_plot['distancia_km'], df_plot['cadencia_spm'], color='tab:green', linestyle='--', label='Cadência')
         lines2.append(line_cad[0])
         labels2.append('Cadência')
@@ -75,13 +73,11 @@ def formatar_tempo_min_seg(segundos):
     segundos = int(segundos % 60)
     return f"{minutos:02d}:{segundos:02d}"
 
-# --- Interface do Aplicativo Streamlit ---
+# --- Interface do Aplicativo Streamlit (sem alterações) ---
 st.set_page_config(page_title="Agente de Análise de Treinos", layout="wide")
 st.title("🏃‍♂️ Agente de Análise de Treinos")
 st.write("Faça o upload do seu arquivo de treino no formato `.fit` para uma análise detalhada e completa.")
-
 uploaded_file = st.file_uploader("Escolha seu arquivo .fit", type="fit")
-
 if uploaded_file is not None:
     try:
         fitfile = fitparse.FitFile(uploaded_file)
@@ -93,70 +89,48 @@ if uploaded_file is not None:
             heart_rates.append(record.get_value('heart_rate'))
             cadences.append(record.get_value('cadence'))
             altitudes.append(record.get_value('altitude'))
-
-        df = pd.DataFrame({
-            'timestamp': timestamps, 'distancia_m': distancias,
-            'fc_bpm': heart_rates, 'cadencia_spm': cadences,
-            'altitude_m': altitudes
-        })
-
+        df = pd.DataFrame({'timestamp': timestamps, 'distancia_m': distancias, 'fc_bpm': heart_rates, 'cadencia_spm': cadences, 'altitude_m': altitudes})
         st.header("Análise Detalhada do Treino")
-        
         with st.spinner('Analisando dados... Isso pode levar um momento.'):
             df_com_pace = calcular_velocidade_e_pace(df)
-
             st.subheader("Painel de Métricas Gerais")
-            
             tempo_total = (df_com_pace['timestamp'].iloc[-1] - df_com_pace['timestamp'].iloc[0]).total_seconds()
             distancia_total_km = df_com_pace['distancia_m'].iloc[-1] / 1000.0 if not df_com_pace.empty else 0
             pace_medio_decimal = tempo_total / 60 / distancia_total_km if distancia_total_km > 0 else 0
-            
             fc_media = df_com_pace['fc_bpm'].mean()
             fc_max = df_com_pace['fc_bpm'].max()
-            
             cad_media = df_com_pace['cadencia_spm'].mean()
             cad_max = df_com_pace['cadencia_spm'].max()
-
             velocidade_media_ms = df_com_pace['velocidade_ms'].mean()
             pernada_media_cm = (velocidade_media_ms / (cad_media / 120)) * 100 if cad_media > 0 else 0
-
             df_com_pace['altitude_diff'] = df_com_pace['altitude_m'].diff()
             ascensao_total = df_com_pace[df_com_pace['altitude_diff'] > 0]['altitude_diff'].sum()
-
             col1, col2, col3, col4 = st.columns(4)
             col1.metric("Tempo Total", formatar_tempo_min_seg(tempo_total))
             col2.metric("Distância", f"{distancia_total_km:.2f} km")
             col3.metric("Pace Médio", f"{int(pace_medio_decimal)}:{int((pace_medio_decimal*60)%60):02d} /km")
             col4.metric("Ascensão Total", f"{ascensao_total:.0f} m")
-
             col1_fc, col2_fc, col3_cad, col4_cad = st.columns(4)
             col1_fc.metric("FC Média", f"{fc_media:.0f} bpm")
             col2_fc.metric("FC Máxima", f"{fc_max:.0f} bpm")
             col3_cad.metric("Cadência Média", f"{cad_media:.0f} spm")
             col4_cad.metric("Pernada Média", f"{pernada_media_cm:.0f} cm")
-
             st.subheader("Gráfico de Desempenho por Distância")
             st.pyplot(plotar_grafico(df_com_pace))
-
             st.subheader("Análise de Esforço: Zonas de Frequência Cardíaca")
             fc_max_input = st.number_input("Informe sua Frequência Cardíaca Máxima (bpm):", min_value=100, max_value=250, value=183)
-            
             if fc_max_input:
                 tempo_por_zona = analisar_zonas_fc(df, fc_max_input)
-                
                 if not tempo_por_zona.empty:
                     total_tempo = tempo_por_zona.sum()
                     tabela_zonas = pd.DataFrame(tempo_por_zona).reset_index()
                     tabela_zonas.columns = ['Zona', 'Tempo (s)']
-                    
-                    tabela_zonas['Tempo'] = tabela_zonas['Tempo (s)'].apply(formatar_tempo_min_seg)
+                    tabela_zonas['Tempo'] = tabelas_zonas['Tempo (s)'].apply(formatar_tempo_min_seg)
                     tabela_zonas['Percentual'] = (tabela_zonas['Tempo (s)'] / total_tempo * 100).map('{:.1f}%'.format)
-                    
                     tabela_zonas.set_index('Zona', inplace=True)
                     st.table(tabela_zonas[['Tempo', 'Percentual']])
                 else:
                     st.warning("Não foram encontrados dados de Frequência Cardíaca suficientes para a análise de zonas.")
-
     except Exception as e:
         st.error(f"Ocorreu um erro ao processar o arquivo.")
         st.exception(e)
