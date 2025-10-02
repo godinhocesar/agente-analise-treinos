@@ -43,17 +43,19 @@ def plotar_grafico(df):
     color = 'tab:blue'
     ax1.set_xlabel('Distância (km)')
     ax1.set_ylabel('Pace (min/km)', color=color, fontsize=12)
-    ax1.plot(df_plot['distancia_km'], df_plot['pace_suavizado'], color=color, label='Pace (Suavizado)')
+    
+    # --- ALTERAÇÃO PRINCIPAL: Trocando linha por área preenchida ---
+    # Em vez de ax1.plot, usamos ax1.fill_between
+    ax1.fill_between(df_plot['distancia_km'], df_plot['pace_suavizado'], 8.0, color=color, alpha=0.8, label='Pace (Suavizado)')
+    
     ax1.tick_params(axis='y', labelcolor=color)
     ax1.invert_yaxis()
-
-    # --- ALTERAÇÃO PRINCIPAL: Definindo os limites do eixo do Pace ---
-    ax1.set_ylim(8.0, 3.0) # Define a escala de 8:00/km a 3:00/km
+    ax1.set_ylim(8.0, 3.0)
 
     ax2 = ax1.twinx()
     color_fc = 'tab:red'
     ax2.set_ylabel('FC (bpm)', color=color_fc, fontsize=12)
-    ax2.plot(df_plot['distancia_km'], df_plot['fc_bpm'], color=color_fc, label='Frequência Cardíaca')
+    ax2.plot(df_plot['distancia_km'], df_plot['fc_bpm'], color=color_fc, alpha=0.9, label='Frequência Cardíaca')
     ax2.tick_params(axis='y', labelcolor=color_fc)
 
     lines, labels = ax1.get_legend_handles_labels()
