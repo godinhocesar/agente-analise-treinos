@@ -65,14 +65,16 @@ def plotar_grafico(df):
     ax1.legend(lines + lines2, labels + labels2, loc='best')
     return fig
 
-# --- NOVA FUNCIONALIDADE ---
 def calcular_parciais_km(df):
     df_parciais = df.dropna(subset=['delta_tempo_s', 'distancia_m']).copy()
     df_parciais['km_atual'] = (df_parciais['distancia_m'] // 1000).astype(int)
     
     parciais = []
     tempo_acumulado = 0
-    for km in range(df_parciais['km_atual'].max() + 1):
+    # Garante que percorremos todos os Kms, mesmo que o último não esteja completo
+    km_max = int(df_parciais['distancia_m'].max() // 1000)
+
+    for km in range(km_max + 1):
         dados_km = df_parciais[df_parciais['km_atual'] == km]
         if not dados_km.empty:
             tempo_parcial = dados_km['delta_tempo_s'].sum()
@@ -130,7 +132,6 @@ if uploaded_file is not None:
             df_com_pace = calcular_velocidade_e_pace(df)
 
             st.subheader("Painel de Métricas Gerais")
-            # ... (código do painel de métricas permanece o mesmo)
             tempo_total = (df_com_pace['timestamp'].iloc[-1] - df_com_pace['timestamp'].iloc[0]).total_seconds()
             distancia_total_km = df_com_pace['distancia_m'].iloc[-1] / 1000.0 if not df_com_pace.empty else 0
             pace_medio_decimal = tempo_total / 60 / distancia_total_km if distancia_total_km > 0 else 0
@@ -153,7 +154,6 @@ if uploaded_file is not None:
             col3_cad.metric("Cadência Média", f"{cad_media:.0f} spm")
             col4_cad.metric("Pernada Média", f"{pernada_media_cm:.0f} cm")
 
-            # --- NOVIDADE: Tabela de Parciais ---
             st.subheader("Análise de Ritmo por Quilómetro (Parciais)")
             df_parciais = calcular_parciais_km(df_com_pace)
             st.dataframe(df_parciais.set_index('Km'), use_container_width=True)
@@ -164,14 +164,17 @@ if uploaded_file is not None:
             st.subheader("Análise de Esforço: Zonas de Frequência Cardíaca")
             fc_max_input = st.number_input("Informe sua Frequência Cardíaca Máxima (bpm):", min_value=100, max_value=250, value=183)
             
+            # --- SEÇÃO CORRIGIDA (DE NOVO E COM MAIS ATENÇÃO) ---
             if fc_max_input:
                 tempo_por_zona = analisar_zonas_fc(df, fc_max_input)
                 if not tempo_por_zona.empty:
                     total_tempo = tempo_por_zona.sum()
                     tabela_zonas = pd.DataFrame(tempo_por_zona).reset_index()
                     tabela_zonas.columns = ['Zona', 'Tempo (s)']
-                    tabela_zonas['Tempo'] = tabelas_zonas['Tempo (s)'].apply(formatar_tempo_min_seg)
+                    
+                    tabela_zonas['Tempo'] = tabela_zonas['Tempo (s)'].apply(formatar_tempo_min_seg)
                     tabela_zonas['Percentual'] = (tabela_zonas['Tempo (s)'] / total_tempo * 100).map('{:.1f}%'.format)
+                    
                     tabela_zonas.set_index('Zona', inplace=True)
                     st.table(tabela_zonas[['Tempo', 'Percentual']])
                 else:
