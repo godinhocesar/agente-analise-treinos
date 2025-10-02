@@ -18,32 +18,26 @@ def calcular_velocidade_e_pace(df):
     df_calc['pace_min_km'] = 16.667 / df_calc['velocidade_ms']
     return df_calc
 
-# --- FUNÇÃO CRÍTICA CORRIGIDA ---
 def analisar_zonas_fc(df, fc_maxima):
-    # Trabalha com uma cópia que tem os dados essenciais: timestamp e FC
     df_fc = df.dropna(subset=['timestamp', 'fc_bpm']).copy()
     if df_fc.empty:
         return pd.Series(dtype='float64')
-
-    # Calcula o tempo real decorrido entre cada ponto de dados
     df_fc['delta_tempo_s'] = df_fc['timestamp'].diff().dt.total_seconds()
-    # O primeiro ponto não terá um delta, podemos assumir 1 segundo por defeito
     df_fc['delta_tempo_s'].fillna(1, inplace=True)
-
-    # Classifica cada ponto de dado numa zona de FC
     zonas_limites = [0, fc_maxima * 0.6, fc_maxima * 0.7, fc_maxima * 0.8, fc_maxima * 0.9, fc_maxima * 2]
     zonas_labels = ["Z1 - Muito Leve", "Z2 - Leve", "Z3 - Moderado", "Z4 - Difícil", "Z5 - Máximo"]
     df_fc['zona_fc'] = pd.cut(df_fc['fc_bpm'], bins=zonas_limites, labels=zonas_labels, right=False, include_lowest=True)
-
-    # Agrupa por zona e SOMA o tempo decorrido, em vez de apenas contar os registos
     tempo_por_zona = df_fc.groupby('zona_fc', observed=False)['delta_tempo_s'].sum()
-    
     return tempo_por_zona
 
 def plotar_grafico(df):
     df_plot = df.dropna(subset=['distancia_m', 'velocidade_ms', 'fc_bpm']).copy()
     df_plot['distancia_km'] = df_plot['distancia_m'] / 1000.0
-    df_plot['pace_suavizado'] = df_plot['pace_min_km'].rolling(window=15, min_periods=1).mean()
+    df_plot['pace_min_km'] = 16.667 / df_plot['velocidade_ms']
+    
+    # --- ALTERAÇÃO PRINCIPAL: Aumentando a janela de suavização ---
+    df_plot['pace_suavizado'] = df_plot['pace_min_km'].rolling(window=30, min_periods=1).mean()
+    
     df_plot = df_plot[(df_plot['pace_suavizado'] < 15) & (df_plot['pace_suavizado'] > 2)]
     
     fig, ax1 = plt.subplots(figsize=(15, 7))
@@ -62,14 +56,15 @@ def plotar_grafico(df):
     ax2.plot(df_plot['distancia_km'], df_plot['fc_bpm'], color=color_fc, label='Frequência Cardíaca')
     ax2.tick_params(axis='y', labelcolor=color_fc)
 
+    # --- Coleta e correção das legendas ---
     lines, labels = ax1.get_legend_handles_labels()
     lines2, labels2 = ax2.get_legend_handles_labels()
     
     if df_plot['cadencia_spm'].notna().sum() > 50:
-        ax2.plot(df_plot['distancia_km'], df_plot['cadencia_spm'], color='tab:green', linestyle='--', label='Cadência')
-        lines2_cad, labels2_cad = ax2.get_legend_handles_labels()
-        lines2.append(lines2_cad[-1])
-        labels2.append(labels2_cad[-1])
+        # O plot da cadência retorna uma lista de linhas, pegamos a primeira
+        line_cad = ax2.plot(df_plot['distancia_km'], df_plot['cadencia_spm'], color='tab:green', linestyle='--', label='Cadência')
+        lines2.append(line_cad[0])
+        labels2.append('Cadência')
 
     fig.tight_layout()
     ax1.legend(lines + lines2, labels + labels2, loc='best')
@@ -165,4 +160,3 @@ if uploaded_file is not None:
     except Exception as e:
         st.error(f"Ocorreu um erro ao processar o arquivo.")
         st.exception(e)
-
