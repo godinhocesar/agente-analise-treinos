@@ -71,7 +71,6 @@ def calcular_parciais_km(df):
     
     parciais = []
     tempo_acumulado = 0
-    # Garante que percorremos todos os Kms, mesmo que o último não esteja completo
     km_max = int(df_parciais['distancia_m'].max() // 1000)
 
     for km in range(km_max + 1):
@@ -100,18 +99,62 @@ def formatar_tempo_min_seg(segundos):
 def formatar_tempo_hms(segundos):
     return str(timedelta(seconds=int(segundos)))
 
+# --- NOVIDADE: Motor de Regras da IA ---
+def gerar_feedback_ia(tempo_por_zona, sono, stress, energia):
+    insights = []
+    
+    total_tempo = tempo_por_zona.sum()
+    tempo_z4 = tempo_por_zona.get("Z4 - Difícil", 0)
+    tempo_z5 = tempo_por_zona.get("Z5 - Máximo", 0)
+    percentual_alta_intensidade = ((tempo_z4 + tempo_z5) / total_tempo) * 100 if total_tempo > 0 else 0
+
+    # Análise do Treino
+    if percentual_alta_intensidade > 50:
+        insights.append(f"**Análise do Esforço:** Este foi um treino de alta intensidade, com **{percentual_alta_intensidade:.0f}%** do tempo em zonas de esforço difíceis a máximas. Excelente para ganhos de velocidade e performance!")
+    elif percentual_alta_intensidade < 20:
+        insights.append(f"**Análise do Esforço:** Este foi um treino de baixa intensidade, com apenas **{percentual_alta_intensidade:.0f}%** do tempo em esforço elevado. Perfeito para construção de base aeróbica e recuperação.")
+    else:
+        insights.append(f"**Análise do Esforço:** Este foi um treino de intensidade moderada, com **{percentual_alta_intensidade:.0f}%** do tempo em esforço elevado. Um bom treino para manutenção.")
+
+    # Análise dos Dados Subjetivos
+    if sono <= 2:
+        insights.append(f"**Ponto de Atenção (Sono):** Você reportou uma qualidade de sono baixa (nota {sono}). Lembre-se que o sono é o pilar da recuperação. Tente priorizar o descanso esta noite.")
+    if stress >= 4:
+        insights.append(f"**Ponto de Atenção (Stress):** O seu nível de stress reportado ({stress}) está alto. O stress crónico pode impactar negativamente a sua recuperação e performance.")
+    
+    # Cruzamento de Dados (A magia da IA)
+    if percentual_alta_intensidade > 50 and sono <= 2:
+        insights.append(f"**ALERTA DO TREINADOR:** Você executou um treino muito intenso após uma noite de sono de baixa qualidade. Embora o treino tenha sido bom, o risco de overtraining aumenta. **A recomendação para amanhã é um descanso completo ou um treino muito leve em Zona 2.**")
+    
+    if energia <= 2:
+        insights.append(f"**Observação:** Você começou o treino com um nível de energia baixo ({energia}). Analise se a causa pode ser a nutrição pré-treino ou o cansaço acumulado.")
+
+    if not insights:
+        return "Parece que tudo está em ordem! O treino foi bem executado e os seus indicadores de recuperação estão bons. Continue assim!"
+
+    return "\n\n".join(f"- {insight}" for insight in insights)
+
 
 # --- Interface do Aplicativo Streamlit ---
 st.set_page_config(page_title="Agente de Análise de Treinos", layout="wide")
-st.title("🏃‍♂️ Agente de Análise de Treinos")
-st.write("Faça o upload do seu arquivo de treino no formato `.fit` para uma análise detalhada e completa.")
+
+# --- NOVIDADE: Barra Lateral para Inputs Manuais ---
+with st.sidebar:
+    st.header("Dados Subjetivos do Dia")
+    st.write("Informe como você se sentiu no dia do treino.")
+    qualidade_sono = st.slider("Qualidade do Sono (1=Ruim, 5=Ótima)", 1, 5, 4)
+    nivel_stress = st.slider("Nível de Stress (1=Baixo, 5=Alto)", 1, 5, 2)
+    nivel_energia = st.slider("Nível de Energia pré-treino (1=Baixo, 5=Alto)", 1, 5, 4)
+
+st.title("🏃‍♂️ Plataforma de Treino Inteligente")
+st.write("Faça o upload do seu arquivo de treino no formato `.fit` para uma análise completa e receba o feedback do seu treinador de IA.")
 
 uploaded_file = st.file_uploader("Escolha seu arquivo .fit", type="fit")
 
 if uploaded_file is not None:
     try:
+        # (O código de leitura e processamento inicial permanece o mesmo)
         fitfile = fitparse.FitFile(uploaded_file)
-        
         timestamps, distancias, heart_rates, cadences, altitudes = [], [], [], [], []
         for record in fitfile.get_messages('record'):
             timestamps.append(record.get_value('timestamp'))
@@ -119,19 +162,14 @@ if uploaded_file is not None:
             heart_rates.append(record.get_value('heart_rate'))
             cadences.append(record.get_value('cadence'))
             altitudes.append(record.get_value('altitude'))
-
-        df = pd.DataFrame({
-            'timestamp': timestamps, 'distancia_m': distancias,
-            'fc_bpm': heart_rates, 'cadencia_spm': cadences,
-            'altitude_m': altitudes
-        })
-
-        st.header("Análise Detalhada do Treino")
+        df = pd.DataFrame({'timestamp': timestamps, 'distancia_m': distancias, 'fc_bpm': heart_rates, 'cadencia_spm': cadences, 'altitude_m': altitudes})
         
+        st.header("Análise Detalhada do Treino")
         with st.spinner('Analisando dados... Isso pode levar um momento.'):
             df_com_pace = calcular_velocidade_e_pace(df)
 
             st.subheader("Painel de Métricas Gerais")
+            # ... (código do painel de métricas permanece o mesmo)
             tempo_total = (df_com_pace['timestamp'].iloc[-1] - df_com_pace['timestamp'].iloc[0]).total_seconds()
             distancia_total_km = df_com_pace['distancia_m'].iloc[-1] / 1000.0 if not df_com_pace.empty else 0
             pace_medio_decimal = tempo_total / 60 / distancia_total_km if distancia_total_km > 0 else 0
@@ -164,19 +202,25 @@ if uploaded_file is not None:
             st.subheader("Análise de Esforço: Zonas de Frequência Cardíaca")
             fc_max_input = st.number_input("Informe sua Frequência Cardíaca Máxima (bpm):", min_value=100, max_value=250, value=183)
             
-            # --- SEÇÃO CORRIGIDA (DE NOVO E COM MAIS ATENÇÃO) ---
+            # --- NOVIDADE: Chamada e Exibição do Feedback da IA ---
             if fc_max_input:
                 tempo_por_zona = analisar_zonas_fc(df, fc_max_input)
+                
+                # Exibe a tabela de Zonas de FC
                 if not tempo_por_zona.empty:
+                    st.subheader("Tempo em Cada Zona de Esforço")
                     total_tempo = tempo_por_zona.sum()
                     tabela_zonas = pd.DataFrame(tempo_por_zona).reset_index()
                     tabela_zonas.columns = ['Zona', 'Tempo (s)']
-                    
                     tabela_zonas['Tempo'] = tabela_zonas['Tempo (s)'].apply(formatar_tempo_min_seg)
                     tabela_zonas['Percentual'] = (tabela_zonas['Tempo (s)'] / total_tempo * 100).map('{:.1f}%'.format)
-                    
                     tabela_zonas.set_index('Zona', inplace=True)
                     st.table(tabela_zonas[['Tempo', 'Percentual']])
+                    
+                    # Gera e exibe o feedback da IA
+                    st.subheader("🤖 Feedback do Treinador de IA")
+                    feedback = gerar_feedback_ia(tempo_por_zona, qualidade_sono, nivel_stress, nivel_energia)
+                    st.info(feedback)
                 else:
                     st.warning("Não foram encontrados dados de Frequência Cardíaca suficientes para a análise de zonas.")
     except Exception as e:
