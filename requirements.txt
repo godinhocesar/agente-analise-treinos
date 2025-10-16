@@ -2,3 +2,6 @@ fitparse
 pandas
 matplotlib
 streamlit
+requests
+google-cloud-firestore
+google-auth-oauthlib

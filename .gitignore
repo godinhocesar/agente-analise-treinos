@@ -1,0 +1,23 @@
+# Ambiente Virtual do Python
+venv/
+
+# Pasta de segredos do Streamlit
+.streamlit/secrets.toml
+
+# Ficheiros de cache e compilados do Python
+__pycache__/
+*.pyc
+
+# Ficheiros de sistema do macOS
+.DS_Store
+
+# Ficheiros de configuração do VS Code
+.vscode/
+*.code-workspace
+
+# Ficheiros de dados de exemplo e resultados
+*.fit
+*.png
+*.jpg
+*.html
+Exports/
