@@ -1,9 +1,10 @@
-fitparse
+setuptools
+streamlit
 pandas
 matplotlib
-streamlit
 requests
 google-cloud-firestore
 google-auth-oauthlib
-streamlit-authenticator
 Pyrebase4
+streamlit-authenticator
+pyyaml
