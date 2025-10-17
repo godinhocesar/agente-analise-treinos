@@ -32,3 +32,18 @@ def get_analyses_from_firestore(_db, user_id):
     df['activity_date'] = pd.to_datetime(df['activity_date'])
     df.sort_values(by='activity_date', ascending=False, inplace=True)
     return df
+
+# --- NOVIDADE ---
+def update_user_strava_token(db, user_id, token_data):
+    """Guarda ou atualiza o token do Strava para um utilizador."""
+    # Usamos o user_id do Firebase (user_uid) como ID do documento
+    user_ref = db.collection("users").document(str(user_id))
+    user_ref.set({'strava_token': token_data}, merge=True)
+
+def get_user_strava_token(db, user_id):
+    """Busca o token do Strava guardado para um utilizador."""
+    user_ref = db.collection("users").document(str(user_id))
+    user_doc = user_ref.get()
+    if user_doc.exists:
+        return user_doc.to_dict().get('strava_token')
+    return None

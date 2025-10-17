@@ -5,7 +5,7 @@ import matplotlib.pyplot as plt
 import requests
 
 # Importa as funções dos seus módulos corretos
-from src.firestore import get_analyses_from_firestore, save_analysis_to_firestore
+from src.firestore import get_analyses_from_firestore, save_analysis_to_firestore, update_user_strava_token, get_user_strava_token
 from src.strava_api import get_strava_activities, get_activity_streams
 from src.data_processing import (
     process_strava_streams, calcular_velocidade_e_pace, calcular_parciais_km,
@@ -29,45 +29,62 @@ def display_sidebar():
 
     return sono_duracao, sono_profundo, sono_score, stress, energia
 
-def display_strava_authentication():
-    """Handles Strava authentication."""
+# --- FUNÇÃO PRINCIPAL ATUALIZADA ---
+def display_strava_authentication(db, user_id):
+    """Gere a autenticação com o Strava, usando o Firestore para persistência."""
+    # 1. Verifica se o token já está na memória da sessão
+    if 'strava_token' in st.session_state:
+        return st.session_state['strava_token']
+
+    # 2. Se não, verifica se o token está guardado na base de dados
+    with st.spinner("A verificar conexão com o Strava..."):
+        token_data = get_user_strava_token(db, user_id)
+        if token_data:
+            st.session_state['strava_token'] = token_data
+            return token_data
+
+    # 3. Se não está em lado nenhum, lida com o fluxo de nova conexão
     try:
         STRAVA_CLIENT_ID = st.secrets["strava"]["client_id"]
         STRAVA_CLIENT_SECRET = st.secrets["strava"]["client_secret"]
-    except (KeyError, FileNotFoundError):
-        st.error("As chaves do Strava não foram encontradas nos segredos. Verifique o seu ficheiro .streamlit/secrets.toml.")
+    except KeyError:
+        st.error("As chaves do Strava não foram encontradas nos segredos.")
         st.stop()
-
+    
     REDIRECT_URI = "http://localhost:8501"
+    query_params = st.query_params
+    auth_code = query_params.get("code")
 
-    if 'strava_token' not in st.session_state:
-        query_params = st.query_params
-        auth_code = query_params.get("code")
-        if auth_code:
-            try:
-                response = requests.post(
-                    'https://www.strava.com/oauth/token',
-                    data={'client_id': STRAVA_CLIENT_ID, 'client_secret': STRAVA_CLIENT_SECRET, 'code': auth_code, 'grant_type': 'authorization_code'}
-                )
-                response.raise_for_status()
-                token_data = response.json()
-                st.session_state['strava_token'] = token_data
-                st.success("Conexão com o Strava bem-sucedida! A página será recarregada.")
-                st.query_params.clear()
-                st.rerun()
-            except requests.exceptions.RequestException as e:
-                st.error(f"Ocorreu um erro ao conectar com o Strava: {e}")
-        else:
-            st.info("Para começar, conecte a sua conta do Strava para importar os seus treinos automaticamente.")
-            auth_url = (f"https://www.strava.com/oauth/authorize?client_id={STRAVA_CLIENT_ID}&redirect_uri={REDIRECT_URI}&response_type=code&scope=activity:read_all")
-            st.link_button("Conectar com o Strava", auth_url, use_container_width=True)
-            return None
-    return st.session_state['strava_token']
+    if auth_code:
+        try:
+            response = requests.post(
+                'https://www.strava.com/oauth/token',
+                data={'client_id': STRAVA_CLIENT_ID, 'client_secret': STRAVA_CLIENT_SECRET, 'code': auth_code, 'grant_type': 'authorization_code'}
+            )
+            response.raise_for_status()
+            token_data = response.json()
+            
+            # 4. GUARDA o novo token na base de dados e na sessão
+            update_user_strava_token(db, user_id, token_data)
+            st.session_state['strava_token'] = token_data
+            st.success("Conexão com o Strava guardada com sucesso!")
+            st.query_params.clear()
+            st.rerun()
+        except requests.exceptions.RequestException as e:
+            st.error(f"Ocorreu um erro ao conectar com o Strava: {e}")
+    else:
+        # 5. Se nada mais funcionou, mostra o botão para conectar
+        st.info("Para começar, conecte a sua conta do Strava. Você só precisará de fazer isto uma vez.")
+        auth_url = (f"https://www.strava.com/oauth/authorize?client_id={STRAVA_CLIENT_ID}&redirect_uri={REDIRECT_URI}&response_type=code&scope=activity:read_all")
+        st.link_button("Conectar com o Strava", auth_url, use_container_width=True)
+        return None
+    return st.session_state.get('strava_token')
+
 
 def display_workout_analysis_tab(db, token_info, sono_duracao, sono_profundo, sono_score):
     """Displays the workout analysis tab."""
     access_token = token_info['access_token']
-    user_id = token_info.get('athlete', {}).get('id')
+    strava_user_id = token_info.get('athlete', {}).get('id')
 
     st.write("Selecione um treino do Strava para uma análise detalhada.")
     try:
@@ -86,7 +103,7 @@ def display_workout_analysis_tab(db, token_info, sono_duracao, sono_profundo, so
             start_date = datetime.fromisoformat(selected_activity['start_date_local'].replace('Z', ''))
             st.header(f"Análise Detalhada: {selected_activity_name}")
             with st.spinner("A analisar o seu treino..."):
-                display_detailed_analysis(db, user_id, activity_id, access_token, start_date, selected_activity_name, sono_duracao, sono_profundo, sono_score, selected_activity)
+                display_detailed_analysis(db, strava_user_id, activity_id, access_token, start_date, selected_activity_name, sono_duracao, sono_profundo, sono_score, selected_activity)
     
     except requests.exceptions.RequestException as e:
         if e.response and e.response.status_code == 401:
@@ -101,26 +118,20 @@ def display_detailed_analysis(db, user_id, activity_id, access_token, start_date
     """Displays the detailed analysis of a selected workout."""
     streams = get_activity_streams(activity_id, access_token)
     df = process_strava_streams(streams, start_date)
-
     if df.empty or 'timestamp' not in df.columns:
         st.error("Não foi possível processar os dados desta atividade.")
         return
-
     df_com_pace = calcular_velocidade_e_pace(df)
-    
     st.subheader("Painel de Métricas Gerais")
     display_general_metrics(df_com_pace, selected_activity)
-
     st.subheader("Análise de Ritmo por Quilómetro (Parciais)")
     df_parciais = calcular_parciais_km(df_com_pace)
     if not df_parciais.empty:
         st.dataframe(df_parciais.set_index('Km'), use_container_width=True)
-
     st.subheader("Gráfico de Desempenho por Distância")
     figura = plotar_grafico(df_com_pace)
     if figura:
         st.pyplot(figura)
-
     st.subheader("Análise de Esforço: Zonas de Frequência Cardíaca")
     has_fc = 'fc_bpm' in df_com_pace.columns and df_com_pace['fc_bpm'].notna().any()
     if has_fc:
@@ -131,11 +142,9 @@ def display_detailed_analysis(db, user_id, activity_id, access_token, start_date
     else:
         tempo_por_zona = None
         st.info("Não há dados de Frequência Cardíaca para este treino.")
-
     st.subheader("🤖 Análise do Treinador de IA")
     analise_texto = gerar_analise_ia(tempo_por_zona, df_parciais, sono_duracao, sono_profundo, sono_score)
     st.markdown(analise_texto)
-
     metrics_to_save = get_metrics_to_save(df_com_pace, selected_activity_name, start_date, has_fc, analise_texto, selected_activity)
     if st.button("Guardar Análise na Base de Dados"):
         with st.spinner("A guardar..."):
@@ -143,6 +152,7 @@ def display_detailed_analysis(db, user_id, activity_id, access_token, start_date
             st.success("Análise guardada com sucesso!")
 
 def display_general_metrics(df_com_pace, selected_activity):
+    # (código completo da função)
     has_dist = 'distancia_m' in df_com_pace.columns and not df_com_pace.empty
     has_fc = 'fc_bpm' in df_com_pace.columns and df_com_pace['fc_bpm'].notna().any()
     has_cadence = 'cadencia_spm' in df_com_pace.columns and df_com_pace['cadencia_spm'].notna().any()
@@ -169,6 +179,7 @@ def display_general_metrics(df_com_pace, selected_activity):
     col4_cad.metric("Pernada Média", f"{pernada_media_cm:.0f} cm" if pernada_media_cm > 0 else "N/A")
 
 def display_hr_zones(tempo_por_zona):
+    # (código completo da função)
     st.subheader("Tempo em Cada Zona de Esforço")
     total_tempo = tempo_por_zona.sum()
     tabela_zonas = pd.DataFrame(tempo_por_zona).reset_index()
@@ -179,6 +190,7 @@ def display_hr_zones(tempo_por_zona):
     st.table(tabela_zonas[['Tempo', 'Percentual']])
 
 def get_metrics_to_save(df_com_pace, selected_activity_name, start_date, has_fc, analise_texto, selected_activity):
+    # (código completo da função)
     tempo_total = (df_com_pace['timestamp'].iloc[-1] - df_com_pace['timestamp'].iloc[0]).total_seconds()
     distancia_total_km = df_com_pace['distancia_m'].iloc[-1] / 1000.0 if 'distancia_m' in df_com_pace.columns else selected_activity.get('distance', 0) / 1000.0
     pace_medio_decimal = tempo_total / 60 / distancia_total_km if distancia_total_km > 0 else 0
@@ -218,7 +230,7 @@ def display_progress_dashboard_tab(db, user_id):
         st.subheader("Evolução do Pace Médio nos Treinos Longos (>= 7km)")
         long_runs_df = history_df[history_df['distancia_km'] >= 7.0].copy()
         if long_runs_df.empty or len(long_runs_df) < 2:
-            st.info("Ainda não há treinos longos suficientes (pelo menos 2 treinos com >= 7km) para gerar um gráfico de evolução de pace.")
+            st.info("Ainda não há treinos longos suficientes (pelo menos 2) para gerar um gráfico de evolução de pace.")
         else:
             long_runs_df.sort_values(by='activity_date', inplace=True)
             fig_pace, ax_pace = plt.subplots()
