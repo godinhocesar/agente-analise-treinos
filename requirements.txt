@@ -5,3 +5,5 @@ streamlit
 requests
 google-cloud-firestore
 google-auth-oauthlib
+streamlit-authenticator
+Pyrebase4

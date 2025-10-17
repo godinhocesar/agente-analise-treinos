@@ -1,0 +1,9 @@
+credentials:
+  usernames: {}
+  # --- ESTA É A LINHA MAIS IMPORTANTE ---
+  # Ela diz à função login() para mostrar a aba de registo.
+  register_user: True
+cookie:
+  expiry_days: 30
+  key: "chave_aleatoria_super_secreta_123" # Pode alterar para qualquer chave aleatória
+  name: "plataforma_treino_cookie_final"

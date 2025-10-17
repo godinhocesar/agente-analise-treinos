@@ -1,6 +1,6 @@
 import pandas as pd
 import numpy as np
-from datetime import timedelta, datetime
+from datetime import timedelta, datetime, time
 
 def calcular_velocidade_e_pace(df):
     """Calculates velocity and pace from a DataFrame of workout data."""
@@ -89,40 +89,32 @@ def process_strava_streams(streams, start_date):
         df['cadencia_spm'] = df['cadencia_spm'] * 2
     return df
 
-def gerar_analise_ia(tempo_por_zona, df_parciais):
-    """Generates an AI-based analysis of a workout."""
-    if tempo_por_zona is None or tempo_por_zona.empty:
-        return "- Não foi possível gerar a análise do treinador pois não há dados de Frequência Cardíaca para este treino."
+# --- NOVIDADE ---
+def gerar_analise_ia(tempo_por_zona, df_parciais, sono_duracao, sono_profundo, sono_score):
+    """Gera uma análise de texto inteligente baseada nos dados do treino e subjetivos."""
+    insights = []
+    
+    if sono_duracao < time(6, 0):
+        insights.append(f"**Ponto de Atenção (Sono):** A sua duração de sono foi de apenas **{sono_duracao.strftime('%Hh%Mmin')}**, o que é insuficiente para uma boa recuperação. O ideal para atletas é entre 7 e 9 horas.")
+    if sono_profundo < time(0, 45):
+         insights.append(f"**Ponto Crítico (Sono Profundo):** Você teve apenas **{sono_profundo.strftime('%M minutos')}** de sono profundo. Esta é a fase mais importante para a reparação muscular. Uma quantidade tão baixa aumenta o risco de lesões e overtraining.")
 
-    analise = []
-    total_tempo = tempo_por_zona.sum()
+    if tempo_por_zona is not None and not tempo_por_zona.empty:
+        total_tempo = tempo_por_zona.sum()
+        tempo_z4_z5 = tempo_por_zona.get("Z4 - Difícil", 0) + tempo_por_zona.get("Z5 - Máximo", 0)
+        percentual_alta_intensidade = (tempo_z4_z5 / total_tempo) * 100 if total_tempo > 0 else 0
+        
+        tipo_treino = "de intensidade moderada"
+        if percentual_alta_intensidade > 40: tipo_treino = "de alta intensidade (Tiros/Variação)"
+        elif percentual_alta_intensidade < 20: tipo_treino = "de baixa intensidade (Leve/Regenerativo)"
+        insights.append(f"**Diagnóstico do Treino:** Este foi um treino {tipo_treino}, com **{percentual_alta_intensidade:.0f}%** do tempo gasto em zonas de esforço elevadas.")
 
-    tempo_z4_z5 = tempo_por_zona.get("Z4 - Difícil", 0) + tempo_por_zona.get("Z5 - Máximo", 0)
-    percentual_alta_intensidade = (tempo_z4_z5 / total_tempo) * 100 if total_tempo > 0 else 0
+        if percentual_alta_intensidade > 50 and sono_duracao < time(6, 0):
+            insights.append(f"**ALERTA DO TREINADOR:** Você executou um treino muito intenso após uma noite de sono insuficiente. O seu corpo está sob um stress considerável. **É crucial que a sua próxima noite de sono seja reparadora e o seu próximo treino seja muito leve (Zona 2) ou de descanso completo.**")
+    else:
+        insights.append("**Diagnóstico do Treino:** Não foi possível analisar o esforço do treino por falta de dados de Frequência Cardíaca.")
 
-    tipo_treino = "de intensidade moderada"
-    if percentual_alta_intensidade > 40:
-        tipo_treino = "de alta intensidade (Tiros/Variação)"
-    elif percentual_alta_intensidade < 20:
-        tipo_treino = "de baixa intensidade (Leve/Regenerativo)"
+    if not insights:
+        return "Parece que tudo está em ordem! O treino foi bem executado e os seus indicadores de recuperação estão bons. Continue assim!"
 
-    analise.append(f"**Diagnóstico do Treino:** Este foi um treino {tipo_treino}, com **{percentual_alta_intensidade:.0f}%** do tempo gasto em zonas de esforço elevadas.")
-
-    if not df_parciais.empty and len(df_parciais) > 2:
-        parciais_seg = df_parciais['Ritmo'].str.extract(r"(\d+)'(\d+)\"").astype(int)
-        parciais_seg['total_s'] = parciais_seg[0] * 60 + parciais_seg[1]
-        desvio_padrao = parciais_seg['total_s'].std()
-
-        if desvio_padrao < 15:
-             analise.append("**Análise de Ritmo:** O seu ritmo foi **extremamente consistente** ao longo do treino. Excelente controlo de esforço!")
-        elif desvio_padrao < 30:
-             analise.append("**Análise de Ritmo:** O seu ritmo foi **consistente**, com pequenas variações. Bom trabalho na gestão de energia.")
-        else:
-             analise.append("**Análise de Ritmo:** O seu ritmo apresentou **variações significativas**, o que pode indicar um treino intervalado ou um percurso com muitas subidas.")
-
-    if tipo_treino.startswith("de alta intensidade"):
-        analise.append("**Recomendação do Treinador:** Excelente trabalho! Após um estímulo tão forte, a prioridade máxima para o seu próximo treino é a **recuperação**. Foque num treino de rodagem muito leve, mantendo a sua FC na Zona 2.")
-    elif tipo_treino.startswith("de baixa intensidade"):
-         analise.append("**Recomendação do Treinador:** Missão cumprida! Este treino de baixa intensidade é fundamental para construir a sua base aeróbica e permitir que o corpo se recupere. É este tipo de treino que o prepara para os dias de maior esforço.")
-
-    return "\n\n".join(f"- {item}" for item in analise)
+    return "\n\n".join(f"- {insight}" for insight in insights)

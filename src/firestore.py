@@ -26,6 +26,9 @@ def get_analyses_from_firestore(_db, user_id):
         return pd.DataFrame()
 
     df = pd.DataFrame(all_activities)
+    if 'activity_date' not in df.columns:
+        return pd.DataFrame()
+        
     df['activity_date'] = pd.to_datetime(df['activity_date'])
     df.sort_values(by='activity_date', ascending=False, inplace=True)
     return df
