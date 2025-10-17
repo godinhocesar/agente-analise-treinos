@@ -1,12 +1,11 @@
 import streamlit as st
 import pandas as pd
-from datetime import datetime, time
+from datetime import datetime, time, timedelta
 import matplotlib.pyplot as plt
 import requests
 
-# Importa as funções dos seus módulos corretos
 from src.firestore import get_analyses_from_firestore, save_analysis_to_firestore, update_user_strava_token, get_user_strava_token
-from src.strava_api import get_strava_activities, get_activity_streams
+from src.strava_api import get_strava_activities, get_activity_streams, refresh_strava_token
 from src.data_processing import (
     process_strava_streams, calcular_velocidade_e_pace, calcular_parciais_km,
     analisar_zonas_fc, gerar_analise_ia, formatar_tempo_hms, formatar_tempo_min_seg
@@ -31,19 +30,38 @@ def display_sidebar():
 
 # --- FUNÇÃO PRINCIPAL ATUALIZADA ---
 def display_strava_authentication(db, user_id):
-    """Gere a autenticação com o Strava, usando o Firestore para persistência."""
-    # 1. Verifica se o token já está na memória da sessão
+    """Gere a autenticação com o Strava, incluindo a renovação do token."""
+    
+    # 1. Se o token já está na memória da sessão e não expirou, usa-o.
     if 'strava_token' in st.session_state:
-        return st.session_state['strava_token']
+        token_data = st.session_state['strava_token']
+        # O Strava devolve 'expires_at' como um timestamp Unix
+        if datetime.now().timestamp() < token_data.get('expires_at', 0):
+            return token_data
 
-    # 2. Se não, verifica se o token está guardado na base de dados
-    with st.spinner("A verificar conexão com o Strava..."):
-        token_data = get_user_strava_token(db, user_id)
-        if token_data:
+    # 2. Se não está na memória ou expirou, busca na base de dados.
+    token_data = get_user_strava_token(db, user_id)
+    
+    # 3. Se encontrou um token na base de dados, verifica se precisa de o renovar.
+    if token_data:
+        if datetime.now().timestamp() >= token_data.get('expires_at', 0):
+            try:
+                with st.spinner("A renovar a sua conexão segura com o Strava..."):
+                    new_token_data = refresh_strava_token(token_data['refresh_token'])
+                    update_user_strava_token(db, user_id, new_token_data)
+                    st.session_state['strava_token'] = new_token_data
+                    st.toast("Conexão com o Strava renovada!", icon="✅")
+                    return new_token_data
+            except requests.exceptions.RequestException as e:
+                st.error("Não foi possível renovar a sua conexão com o Strava. Por favor, conecte-se novamente.")
+                # Limpa tokens inválidos
+                if 'strava_token' in st.session_state: del st.session_state['strava_token']
+                update_user_strava_token(db, user_id, None) 
+        else:
             st.session_state['strava_token'] = token_data
             return token_data
 
-    # 3. Se não está em lado nenhum, lida com o fluxo de nova conexão
+    # 4. Se não há token válido, inicia o fluxo de nova conexão.
     try:
         STRAVA_CLIENT_ID = st.secrets["strava"]["client_id"]
         STRAVA_CLIENT_SECRET = st.secrets["strava"]["client_secret"]
@@ -62,22 +80,20 @@ def display_strava_authentication(db, user_id):
                 data={'client_id': STRAVA_CLIENT_ID, 'client_secret': STRAVA_CLIENT_SECRET, 'code': auth_code, 'grant_type': 'authorization_code'}
             )
             response.raise_for_status()
-            token_data = response.json()
-            
-            # 4. GUARDA o novo token na base de dados e na sessão
-            update_user_strava_token(db, user_id, token_data)
-            st.session_state['strava_token'] = token_data
+            new_token_data = response.json()
+            update_user_strava_token(db, user_id, new_token_data)
+            st.session_state['strava_token'] = new_token_data
             st.success("Conexão com o Strava guardada com sucesso!")
             st.query_params.clear()
             st.rerun()
         except requests.exceptions.RequestException as e:
             st.error(f"Ocorreu um erro ao conectar com o Strava: {e}")
     else:
-        # 5. Se nada mais funcionou, mostra o botão para conectar
         st.info("Para começar, conecte a sua conta do Strava. Você só precisará de fazer isto uma vez.")
         auth_url = (f"https://www.strava.com/oauth/authorize?client_id={STRAVA_CLIENT_ID}&redirect_uri={REDIRECT_URI}&response_type=code&scope=activity:read_all")
         st.link_button("Conectar com o Strava", auth_url, use_container_width=True)
         return None
+    
     return st.session_state.get('strava_token')
 
 
