@@ -1,5 +1,6 @@
 🏃‍♂️ Plataforma de Treino Inteligente
 
+
 Bem-vindo à Plataforma de Treino Inteligente! Este é um projeto em desenvolvimento de uma aplicação web para análise detalhada de treinos de corrida, com o objetivo de se tornar um treinador de IA para atletas amadores.
 
 A plataforma conecta-se à sua conta do Strava, importa as suas atividades de corrida e fornece um dashboard completo com métricas de desempenho, análise de ritmo por quilómetro, gráficos de evolução e análise de esforço por zonas de frequência cardíaca.
